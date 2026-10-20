@@ -1,0 +1,14 @@
+import { useEffect, useState } from 'react'
+import { Smile, RefreshCw, X } from 'lucide-react'
+import { getDentalReferrals, completeDentalReferral } from '@/services/dentalService'
+import { useToast } from '@/store/toastStore'
+
+export default function DentalDashboard(){
+ const toast=useToast();const [rows,setRows]=useState([]);const [filter,setFilter]=useState('pending');const [active,setActive]=useState(null);const [outcome,setOutcome]=useState('');const [notes,setNotes]=useState('');
+ const load=()=>getDentalReferrals(filter).then(setRows);useEffect(()=>{load()},[filter]);
+ const save=async()=>{if(!outcome.trim())return;await completeDentalReferral(active.id,outcome,notes);toast.success('Dental outcome saved');setActive(null);setOutcome('');setNotes('');load()}
+ return <div className="p-4 sm:p-6 space-y-5"><div className="flex justify-between gap-3"><div><h1 className="page-title">Dental Clinic</h1><p className="text-xs text-gray-400">Dental referrals and outcomes</p></div><button onClick={load} className="btn-secondary"><RefreshCw size={15}/></button></div>
+ <div className="card overflow-x-auto"><div className="p-4 border-b flex flex-wrap gap-3 justify-between min-w-[640px]"><h2 className="section-title">Referrals</h2><div className="flex gap-1">{['pending','completed','all'].map(x=><button key={x} onClick={()=>setFilter(x)} className={`px-3 py-1 rounded text-sm ${filter===x?'bg-primary-600 text-white':'bg-gray-100'}`}>{x}</button>)}</div></div>
+ <table className="table-base"><thead><tr><th>Patient</th><th>Doctor</th><th>Notes</th><th>Status</th><th>Action</th></tr></thead><tbody>{rows.map(r=><tr key={r.id}><td className="font-medium">{r.patient_name}</td><td>{r.doctor}</td><td>{r.notes||'—'}</td><td><span className={`badge ${r.status==='completed'?'badge-green':'badge-amber'}`}>{r.status}</span></td><td>{r.status==='pending'&&<button className="btn-primary" onClick={()=>setActive(r)}>Record outcome</button>}</td></tr>)}</tbody></table>{!rows.length&&<div className="py-12 text-center text-gray-400"><Smile className="mx-auto mb-2"/>No referrals</div>}</div>
+ {active&&<div className="fixed inset-0 z-50 bg-gray-900/50 flex items-center justify-center p-4"><div className="bg-white rounded-2xl p-6 w-full max-w-md space-y-4"><div className="flex justify-between"><h2 className="section-title">Dental outcome</h2><button onClick={()=>setActive(null)}><X size={18}/></button></div><input value={outcome} onChange={e=>setOutcome(e.target.value)} className="form-input" placeholder="Diagnosis / procedure completed"/><textarea value={notes} onChange={e=>setNotes(e.target.value)} className="form-input" placeholder="Clinical notes"/><div className="flex justify-end gap-2"><button className="btn-secondary" onClick={()=>setActive(null)}>Cancel</button><button className="btn-primary" onClick={save}>Complete referral</button></div></div></div>}</div>
+}

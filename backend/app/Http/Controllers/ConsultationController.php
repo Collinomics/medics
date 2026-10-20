@@ -1,0 +1,13 @@
+<?php
+namespace App\Http\Controllers;
+use App\Models\Visit; use Illuminate\Http\Request; use Illuminate\Support\Facades\DB;
+class ConsultationController extends Controller { public function store(Request $r,Visit $visit){
+ abort_unless(in_array($r->user()->role,['doctor','admin']),403);
+ $d=$r->validate(['diagnosis'=>'required|string','routes'=>'required|array','routes.*'=>'in:sent_to_lab,sent_to_pharmacy,sent_to_injection,sent_to_dental','prescriptions'=>'array','prescriptions.*.drug_id'=>'required|exists:drugs,id','prescriptions.*.dosage'=>'nullable|string','prescriptions.*.frequency'=>'nullable|string','prescriptions.*.duration'=>'nullable|string','prescriptions.*.quantity'=>'nullable|integer|min:1','lab_orders'=>'array','lab_orders.*.test_id'=>'required|exists:lab_tests,id','injection_order'=>'nullable|array','injection_order.drug'=>'nullable|string','injection_order.dose'=>'nullable|string','injection_order.administration_route'=>'nullable|string','injection_order.instructions'=>'nullable|string']);
+ DB::transaction(function()use($r,$visit,$d){$visit->update(['doctor_id'=>$r->user()->id,'status'=>count($d['routes'])?'awaiting_services':'completed','symptoms'=>$r->symptoms,'diagnosis'=>$d['diagnosis'],'notes'=>$r->notes]);
+  if(count($d['prescriptions']??[])){ $id=DB::table('prescriptions')->insertGetId(['visit_id'=>$visit->id,'doctor_id'=>$r->user()->id,'status'=>'pending','created_at'=>now(),'updated_at'=>now()]);foreach($d['prescriptions'] as $x)DB::table('prescription_items')->insert(['prescription_id'=>$id,'drug_id'=>$x['drug_id'],'dosage'=>$x['dosage']??null,'frequency'=>$x['frequency']??null,'duration'=>$x['duration']??null,'quantity'=>$x['quantity']??1,'created_at'=>now(),'updated_at'=>now()]);}
+  foreach($d['lab_orders']??[] as $x)DB::table('lab_requests')->insert(['visit_id'=>$visit->id,'test_id'=>$x['test_id'],'requested_by'=>$r->user()->id,'status'=>'pending','created_at'=>now(),'updated_at'=>now()]);
+  if(in_array('sent_to_injection',$d['routes']))DB::table('injection_orders')->insert(['visit_id'=>$visit->id,'ordered_by'=>$r->user()->id,'drug'=>$d['injection_order']['drug']??null,'dose'=>$d['injection_order']['dose']??null,'administration_route'=>$d['injection_order']['administration_route']??null,'instructions'=>$d['injection_order']['instructions']??null,'status'=>'pending','created_at'=>now(),'updated_at'=>now()]);
+  if(in_array('sent_to_dental',$d['routes']))DB::table('referrals')->insert(['visit_id'=>$visit->id,'department'=>'dental','referred_by'=>$r->user()->id,'status'=>'pending','notes'=>$r->notes,'created_at'=>now(),'updated_at'=>now()]);
+ });return response()->json(['data'=>['id'=>$visit->id,'status'=>'awaiting_services']]); }
+}
